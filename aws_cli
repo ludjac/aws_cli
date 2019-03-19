@@ -7,6 +7,8 @@ import subprocess
 from pyfiglet import figlet_format
 import pprint
 
+pem_file_dir = "$HOME/.ssh/"
+
 client = boto3.client('ec2')
 
 try:
@@ -88,7 +90,7 @@ def start(name):
 @click.argument('local_dir')
 def mount(name, remote_dir, local_dir):
     i_info = instance_info(name)
-    sshfs_command = f"sshfs -o allow_other,default_permissions,IdentityFile=$HOME/.ssh/{i_info['key_name']}.pem ubuntu@{i_info['public_ip']}:{remote_dir} {local_dir}"
+    sshfs_command = f"sshfs -o allow_other,default_permissions,IdentityFile={pem_file_dir}{i_info['key_name']}.pem ubuntu@{i_info['public_ip']}:{remote_dir} {local_dir}"
     subprocess.run(sshfs_command ,shell=True)
 
 
@@ -97,7 +99,7 @@ def mount(name, remote_dir, local_dir):
 @click.option('-f', '--forward_port', multiple=True)
 def ssh(name, forward_port):
     i_info = instance_info(name)
-    ssh_command = f'ssh -i $HOME/.ssh/{i_info["key_name"]}.pem -A ubuntu@{i_info["public_ip"]}'
+    ssh_command = f'ssh -i {pem_file_dir}{i_info["key_name"]}.pem -A ubuntu@{i_info["public_ip"]}'
     for port in forward_port:
         ssh_command += f" -L {port}:localhost:{port}"
     subprocess.run(ssh_command, shell=True)
