@@ -1,0 +1,107 @@
+#!/usr/bin/python3
+
+import boto3
+import click
+import six
+import subprocess
+from pyfiglet import figlet_format
+import pprint
+
+client = boto3.client('ec2')
+
+try:
+    from termcolor import colored
+except ImportError:
+    colored = None
+
+
+def log(string, color, font='slant', figlet=False):
+    if colored:
+        if not figlet:
+            six.print_(colored(pprint.pformat(string, indent=2), color))
+        else:
+            six.print_(colored(figlet_format(string, font=font), color))
+    else:
+        six.print_(string)
+
+
+def instance_info(name):
+    info = client.describe_instances(Filters=[{'Name': 'tag:Name', 'Values': [name]}])['Reservations'][0]['Instances'][0]
+    info = {
+        'instance_id': info['InstanceId'],
+        'state': info['State']['Name'],
+        'instance_type':info["InstanceType"],
+        'public_ip': info["PublicIpAddress"] if "PublicIpAddress" in info else None,
+        'key_name': info['KeyName'],
+        }
+    return info
+
+
+@click.group()
+def cli():
+    """CLI for AWS instances
+
+    Examples:
+    
+    aws_cli start <instance-name>
+    
+    aws_cli stop <instance-name>
+
+    aws_cli ssh <instance-name>  (-f forward port) (-f forward port)
+
+    aws_cli info <instance-name>
+
+    aws_cli mount <instance-name> <remote_dir> <local-dir>
+"""
+
+    log("AWS_CLI!", color="green", figlet=True)
+
+
+@cli.command()
+@click.argument('name')
+def info(name):
+    i_info = instance_info(name)
+    log(i_info, color='blue')
+
+
+@cli.command()
+@click.argument('name')
+def stop(name):
+    i_info = instance_info(name)
+    res = client.stop_instances(InstanceIds=[i_info['instance_id']])
+    status = res['StoppingInstances']
+    log(status, color='red')
+
+
+@cli.command()
+@click.argument('name')
+def start(name):
+    i_info = instance_info(name)
+    res = client.start_instances(InstanceIds=[i_info['instance_id']]) 
+    status = res['StartingInstances']
+    log(status, color='green')
+
+
+@cli.command()
+@click.argument('name')
+@click.argument('remote_dir')
+@click.argument('local_dir')
+def mount(name, remote_dir, local_dir):
+    i_info = instance_info(name)
+    sshfs_command = f"sshfs -o allow_other,default_permissions,IdentityFile=$HOME/.ssh/{i_info['key_name']}.pem ubuntu@{i_info['public_ip']}:{remote_dir} {local_dir}"
+    subprocess.run(sshfs_command ,shell=True)
+
+
+@cli.command()
+@click.argument('name')
+@click.option('-f', '--forward_port', multiple=True)
+def ssh(name, forward_port):
+    i_info = instance_info(name)
+    ssh_command = f'ssh -i $HOME/.ssh/{i_info["key_name"]}.pem -A ubuntu@{i_info["public_ip"]}'
+    for port in forward_port:
+        ssh_command += f" -L {port}:localhost:{port}"
+    subprocess.run(ssh_command, shell=True)
+
+
+if __name__ == '__main__':
+    cli()
