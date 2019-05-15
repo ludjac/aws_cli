@@ -7,8 +7,6 @@ import subprocess
 from pyfiglet import figlet_format
 import pprint
 
-pem_file_dir = "$HOME/.ssh/"
-
 client = boto3.client('ec2')
 
 try:
@@ -41,22 +39,8 @@ def instance_info(name):
 
 @click.group()
 def cli():
-    """CLI for AWS instances
-
-    Examples:
-    
-    aws_cli start <instance-name>
-    
-    aws_cli stop <instance-name>
-
-    aws_cli ssh <instance-name>  (-f forward port) (-f forward port)
-
-    aws_cli info <instance-name>
-
-    aws_cli mount <instance-name> <remote_dir> <local-dir>
-"""
-
-    log("AWS_CLI!", color="green", figlet=True)
+    """CLI for AWS instances"""
+    log("AWS", color="blue", figlet=True)
 
 
 @cli.command()
@@ -87,10 +71,14 @@ def start(name):
 @cli.command()
 @click.argument('name')
 @click.argument('remote_dir')
-@click.argument('local_dir')
-def mount(name, remote_dir, local_dir):
+@click.argument('local_dir', required=False)
+def mount(name, remote_dir, local_dir=None):
+    import os
+    if local_dir is None:
+        local_dir=os.path.expanduser(f"~/{name}")
+    os.makedirs(local_dir, exist_ok=True)
     i_info = instance_info(name)
-    sshfs_command = f"sshfs -o allow_other,default_permissions,IdentityFile={pem_file_dir}{i_info['key_name']}.pem ubuntu@{i_info['public_ip']}:{remote_dir} {local_dir}"
+    sshfs_command = f"sshfs -o allow_other,default_permissions,IdentityFile=$HOME/.ssh/{i_info['key_name']}.pem ubuntu@{i_info['public_ip']}:{remote_dir} {local_dir}"
     subprocess.run(sshfs_command ,shell=True)
 
 
@@ -99,7 +87,7 @@ def mount(name, remote_dir, local_dir):
 @click.option('-f', '--forward_port', multiple=True)
 def ssh(name, forward_port):
     i_info = instance_info(name)
-    ssh_command = f'ssh -i {pem_file_dir}{i_info["key_name"]}.pem -A ubuntu@{i_info["public_ip"]}'
+    ssh_command = f'ssh -i $HOME/.ssh/{i_info["key_name"]}.pem -A ubuntu@{i_info["public_ip"]}'
     for port in forward_port:
         ssh_command += f" -L {port}:localhost:{port}"
     subprocess.run(ssh_command, shell=True)
